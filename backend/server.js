@@ -1,3 +1,4 @@
+const cors = require("cors");
 const express = require("express");
 const mongoose = require("mongoose");
 const bcrypt = require("bcrypt");
@@ -7,6 +8,7 @@ const User = require("./models/User");
 const app = express();
 
 app.use(express.json());
+app.use(cors());
 
 app.get("/", (req, res) => {
   res.send("API is running");
@@ -83,3 +85,13 @@ app.listen(PORT, () => {
 });
   })
   .catch((err) => console.log(err));
+
+app.post("/login", (req, res) => {
+  const { email, password } = req.body;
+
+  if (email === "test@gmail.com" && password === "123456") {
+    res.json({ message: "Login successful" });
+  } else {
+    res.status(401).json({ message: "Invalid credentials" });
+  }
+});  
