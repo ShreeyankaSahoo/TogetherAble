@@ -73,12 +73,13 @@ app.get("/profile", authMiddleware, (req, res) => {
   res.send("This is protected profile data 🔐");
 });
 
-mongoose
-  .connect("mongodb+srv://9836shreeyanka_db_user:<db_password>@cluster0.vlcjhjl.mongodb.net/?appName=Cluster0")
+mongoose.connect(process.env.MONGO_URI)
   .then(() => {
     console.log("MongoDB connected");
-    app.listen(5000, () => {
-      console.log("Server running on port 5000");
-    });
+    const PORT = process.env.PORT || 5000;
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
   })
   .catch((err) => console.log(err));
