@@ -1,27 +1,73 @@
-import { Link, useLocation } from "react-router-dom";
-import { Heart, Menu, X, MessageCircle, LogOut, UserCircle } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Heart, Menu, X, LogOut, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
-import { useAuth } from "@/contexts/AuthContext";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 const navItems = [
   { label: "Home", path: "/" },
   { label: "Find Your Match", path: "/matching" },
+  { label: "Messages", path: "/messages" },
   { label: "About Us", path: "/about" },
   { label: "Community", path: "/community" },
   { label: "Subscription", path: "/subscription" },
   { label: "Anonymous Dating", path: "/anonymous-dating" },
 ];
 
+interface StoredUser {
+  _id: string;
+  name?: string;
+  email?: string;
+}
+
+const getStoredUser = (): StoredUser | null => {
+  try {
+    const rawUser = localStorage.getItem("user");
+    if (!rawUser) return null;
+
+    const parsedUser = JSON.parse(rawUser) as Partial<StoredUser>;
+    if (!parsedUser?._id) return null;
+
+    return {
+      _id: parsedUser._id,
+      name: parsedUser.name,
+      email: parsedUser.email,
+    };
+  } catch (err) {
+    console.log("Failed to read user from localStorage:", err);
+    return null;
+  }
+};
+
+const getUserLabel = (user: StoredUser) => user.name || user.email || "User";
+
 const Navbar = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user, signOut } = useAuth();
+  const [user, setUser] = useState<StoredUser | null>(() => getStoredUser());
 
-  const handleSignOut = async () => {
-    await signOut();
+  useEffect(() => {
+    const syncUser = () => setUser(getStoredUser());
+
+    syncUser();
+    window.addEventListener("storage", syncUser);
+    window.addEventListener("auth-change", syncUser);
+
+    return () => {
+      window.removeEventListener("storage", syncUser);
+      window.removeEventListener("auth-change", syncUser);
+    };
+  }, []);
+
+  const handleSignOut = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    setUser(null);
+    setMobileOpen(false);
+    window.dispatchEvent(new Event("auth-change"));
     toast.success("Signed out");
+    navigate("/login");
   };
 
   return (
@@ -51,14 +97,9 @@ const Navbar = () => {
         <div className="hidden md:flex items-center gap-2">
           {user ? (
             <>
-              <Link
-                to="/messages"
-                className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors relative"
-                aria-label="Messages"
-              >
-                <MessageCircle className="w-5 h-5" />
-                <span className="absolute top-0.5 right-0.5 w-2.5 h-2.5 bg-primary rounded-full border-2 border-card" />
-              </Link>
+              <span className="text-sm font-medium text-foreground">
+                Hi, {getUserLabel(user)}
+              </span>
               <Link
                 to="/profile"
                 className="p-2 rounded-full hover:bg-muted text-muted-foreground transition-colors"
@@ -109,9 +150,15 @@ const Navbar = () => {
           ))}
           <div className="flex gap-2 pt-2">
             {user ? (
-              <Button variant="ghost" className="flex-1" onClick={() => { handleSignOut(); setMobileOpen(false); }}>
-                Sign Out
-              </Button>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 px-4 py-2 text-sm font-medium">
+                  <UserCircle className="w-4 h-4" />
+                  Hi, {getUserLabel(user)}
+                </div>
+                <Button variant="ghost" className="w-full" onClick={handleSignOut}>
+                  Sign Out
+                </Button>
+              </div>
             ) : (
               <>
                 <Button variant="ghost" className="flex-1" asChild>

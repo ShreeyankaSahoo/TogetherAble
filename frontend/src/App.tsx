@@ -58,19 +58,19 @@ function App() {
               />
 
               <Route
-                path="/messages"
+                path="/profile"
                 element={
                   <ProtectedRoute>
-                    <MessagesPage />
+                    <ProfilePage />
                   </ProtectedRoute>
                 }
               />
 
               <Route
-                path="/profile"
+                path="/messages"
                 element={
                   <ProtectedRoute>
-                    <ProfilePage />
+                    <MessagesPage />
                   </ProtectedRoute>
                 }
               />

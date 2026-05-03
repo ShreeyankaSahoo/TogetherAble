@@ -1,17 +1,43 @@
 const express = require("express");
+const http = require("http");
 const mongoose = require("mongoose");
 const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+const { Server } = require("socket.io");
 
 const User = require("./models/User");
 const Message = require("./models/message");
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: ["http://localhost:8080", "http://127.0.0.1:8080"],
+    methods: ["GET", "POST"],
+  },
+});
+// Add this near the top, after imports
+const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here"; // use env variable in production
 
 // ================= MIDDLEWARE =================
 app.use(express.json());
 app.use(cors());
+
+// ================= SOCKET.IO =================
+io.on("connection", (socket) => {
+  console.log("Socket connected:", socket.id);
+
+  socket.on("join", (userId) => {
+    if (!userId) return;
+    socket.join(userId);
+    console.log(`User ${userId} joined socket room`);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Socket disconnected:", socket.id);
+  });
+});
 
 // ================= MONGODB =================
 mongoose
@@ -23,9 +49,35 @@ mongoose
 // ================= SIGNUP =================
 app.post("/signup", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const {
+      name,
+      email,
+      password,
+      contactNumber,
+      country,
+      location,
+      genderIdentity,
+      pronouns,
+      disabilityType,
+      disabilityPercentage,
+      communicationStyle,
+      interests = [],
+      accessibilityPreferences = [],
+      communityTags = [],
+    } = req.body;
 
-    const existingUser = await User.findOne({ email });
+    const trimmedName = String(name || "").trim();
+    const normalizedEmail = String(email || "").trim().toLowerCase();
+
+    if (!trimmedName || !normalizedEmail || !password) {
+      return res.status(400).json({ message: "Name, email, and password are required" });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    }
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
       return res.status(400).json({ message: "User already exists" });
     }
@@ -33,16 +85,34 @@ app.post("/signup", async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const user = new User({
-      name,
-      email,
+      name: trimmedName,
+      email: normalizedEmail,
       password: hashedPassword,
+      contactNumber,
+      country,
+      location,
+      genderIdentity,
+      pronouns,
+      disabilityType,
+      disabilityPercentage,
+      communicationStyle,
+      interests,
+      accessibilityPreferences,
+      communityTags,
     });
 
     await user.save();
 
-    res.json({ message: "Signup successful" });
+    res.status(201).json({
+      message: "Signup successful",
+      user: { _id: user._id, name: user.name, email: user.email },
+    });
   } catch (err) {
-    res.status(500).json({ error: "Signup failed" });
+    console.log("SIGNUP ERROR:", err);
+    if (err.code === 11000) {
+      return res.status(400).json({ message: "User already exists" });
+    }
+    res.status(500).json({ message: "Signup failed" });
   }
 });
 
@@ -51,24 +121,48 @@ app.post("/signup", async (req, res) => {
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
+    const normalizedEmail = String(email || "").trim().toLowerCase();
 
-    const user = await User.findOne({ email });
-
+    const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       return res.status(400).json({ message: "User not found" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
-
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-    res.json({ user });
+    // Sign a token instead of sending the raw user object
+    const token = jwt.sign(
+      { userId: user._id, name: user.name, email: user.email },
+      JWT_SECRET,
+      { expiresIn: "7d" }
+    );
+
+    res.json({ token, user: { _id: user._id, name: user.name, email: user.email } });
 
   } catch (err) {
     console.log("LOGIN ERROR:", err);
     res.status(500).json({ message: "Server error" });
+  }
+});
+
+// ================= GET USERS =================
+app.get("/users", async (req, res) => {
+  try {
+    const { userId } = req.query;
+    const filter = userId ? { _id: { $ne: userId } } : {};
+
+    // TODO: Reintroduce match-based filtering later.
+    const users = await User.find(filter)
+      .select("_id name email")
+      .sort({ name: 1 });
+
+    res.json(users);
+  } catch (err) {
+    console.log("GET USERS ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch users" });
   }
 });
 
@@ -77,17 +171,26 @@ app.post("/login", async (req, res) => {
 app.post("/send-message", async (req, res) => {
   try {
     const { senderId, receiverId, text } = req.body;
+    const trimmedText = String(text || "").trim();
+
+    if (!senderId || !receiverId || !trimmedText) {
+      return res.status(400).json({ error: "senderId, receiverId, and text are required" });
+    }
 
     const message = new Message({
       sender: senderId,
       receiver: receiverId,
-      text,
+      text: trimmedText,
     });
 
     await message.save();
 
+    io.to(receiverId).emit("receiveMessage", message);
+    io.to(senderId).emit("receiveMessage", message);
+
     res.json(message);
   } catch (err) {
+    console.log("SEND MESSAGE ERROR:", err);
     res.status(500).json({ error: "Failed to send message" });
   }
 });
@@ -107,12 +210,53 @@ app.get("/messages/:user1/:user2", async (req, res) => {
 
     res.json(messages);
   } catch (err) {
+    console.log("GET MESSAGES ERROR:", err);
     res.status(500).json({ error: "Failed to fetch messages" });
   }
 });
 
+// ================= GET CONVERSATIONS =================
+app.get("/conversations/:userId", async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const messages = await Message.find({
+      $or: [{ sender: userId }, { receiver: userId }],
+    })
+      .sort({ createdAt: -1 })
+      .populate("sender", "_id name email")
+      .populate("receiver", "_id name email");
+
+    const conversationMap = new Map();
+
+    messages.forEach((message) => {
+      const sender = message.sender;
+      const receiver = message.receiver;
+      const otherUser =
+        String(sender._id) === userId ? receiver : sender;
+
+      if (!conversationMap.has(String(otherUser._id))) {
+        conversationMap.set(String(otherUser._id), {
+          user: otherUser,
+          lastMessage: {
+            _id: message._id,
+            text: message.text,
+            sender: sender._id,
+            receiver: receiver._id,
+            createdAt: message.createdAt,
+          },
+        });
+      }
+    });
+
+    res.json([...conversationMap.values()]);
+  } catch (err) {
+    console.log("GET CONVERSATIONS ERROR:", err);
+    res.status(500).json({ error: "Failed to fetch conversations" });
+  }
+});
 
 // ================= START SERVER =================
-app.listen(10000, () => {
+server.listen(10000, () => {
   console.log("Server running on port 10000");
 });

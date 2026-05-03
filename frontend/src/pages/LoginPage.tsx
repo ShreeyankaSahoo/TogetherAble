@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const LoginPage = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const navigate = useNavigate();
 
   const handleLogin = async () => {
     try {
@@ -21,11 +23,13 @@ const LoginPage = () => {
       console.log(data); // 👈 VERY IMPORTANT
 
       if (res.ok) {
+        localStorage.setItem("token", data.token);
         localStorage.setItem("user", JSON.stringify(data.user));
+        window.dispatchEvent(new Event("auth-change"));
 
         alert("Login successful");
 
-        window.location.href = "/messages";
+        navigate("/messages");
       } else {
         alert(data.message || "Login failed");
       }

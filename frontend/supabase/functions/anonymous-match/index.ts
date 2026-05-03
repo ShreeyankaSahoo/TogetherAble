@@ -7,6 +7,13 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+interface MatchProfile {
+  id: string;
+  interests?: string[] | null;
+  communication_style?: string | null;
+  bio?: string | null;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -227,8 +234,8 @@ serve(async (req) => {
 });
 
 function calculateFallbackScore(
-  userProfile: any,
-  candidates: any[],
+  userProfile: MatchProfile | null,
+  candidates: MatchProfile[] | null,
   availableIds: string[]
 ): number {
   if (!userProfile?.interests?.length || !candidates?.length) return 50 + Math.floor(Math.random() * 30);

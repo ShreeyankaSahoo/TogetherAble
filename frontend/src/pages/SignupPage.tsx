@@ -2,9 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Heart, ChevronRight, ChevronLeft, Plus, X, Shield, Sparkles, Users } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "sonner";
-import { supabase } from "@/integrations/supabase/client";
 
 const TOTAL_STEPS = 4;
 
@@ -68,7 +66,6 @@ const SignupPage = () => {
   const [location, setLocation] = useState("");
 
   const [loading, setLoading] = useState(false);
-  const { signUp } = useAuth();
   const navigate = useNavigate();
 
   const toggleInterest = (interest: string) => {
@@ -103,14 +100,40 @@ const SignupPage = () => {
     const finalGender = genderIdentity === "Prefer to self-describe" ? customGender : genderIdentity;
     const finalPronouns = pronouns === "Custom" ? customPronouns : pronouns;
 
-    const { error } = await signUp(email, password, {
-      display_name: displayName,
-      disability_type: disabilityType,
-      communication_style: commStyle.toLowerCase(),
-    });
+    try {
+      const res = await fetch("http://localhost:10000/signup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          name: displayName,
+          email,
+          password,
+          contactNumber,
+          country,
+          location,
+          genderIdentity: finalGender,
+          pronouns: finalPronouns,
+          disabilityType,
+          disabilityPercentage,
+          communicationStyle: commStyle.toLowerCase(),
+          interests: selectedInterests,
+          accessibilityPreferences: accessibilityPrefs,
+          communityTags,
+        }),
+      });
 
-    if (error) {
-      toast.error(error.message);
+      const data = await res.json();
+
+      if (!res.ok) {
+        toast.error(data.message || "Signup failed");
+        setLoading(false);
+        return;
+      }
+    } catch (err) {
+      console.log("SIGNUP ERROR:", err);
+      toast.error("Server error. Please make sure the backend is running.");
       setLoading(false);
       return;
     }
@@ -128,7 +151,7 @@ const SignupPage = () => {
     localStorage.setItem("togetherable_onboarding", JSON.stringify(onboardingData));
 
     setLoading(false);
-    toast.success("Account created! Please check your email to confirm.");
+    toast.success("Account created! You can log in now.");
     navigate("/login");
   };
 

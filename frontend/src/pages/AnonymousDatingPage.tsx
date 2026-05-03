@@ -19,6 +19,7 @@ import {
   useAnonMessages,
   sendAnonMessage,
   findMatch,
+  type AnonMatch,
 } from "@/hooks/useAnonymousDating";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -103,8 +104,8 @@ const AnonymousDatingFlow = () => {
     try {
       await findMatch(user.id);
       await refetch();
-    } catch (e: any) {
-      toast.error(e.message || "No match found");
+    } catch (e: unknown) {
+      toast.error(e instanceof Error ? e.message : "No match found");
     } finally {
       setFinding(false);
     }
@@ -317,7 +318,7 @@ const AnonymousChat = ({
   onEnd,
   onReveal,
 }: {
-  match: any;
+  match: AnonMatch;
   partnerNickname: string;
   myNickname: string;
   onEnd: () => void;
@@ -344,12 +345,12 @@ const AnonymousChat = ({
   useEffect(() => {
     if (!user) return;
     supabase
-      .from("anonymous_blocks" as any)
+      .from("anonymous_blocks")
       .select("id")
       .eq("blocker_id", user.id)
       .eq("blocked_user_id", partnerId)
       .maybeSingle()
-      .then(({ data }: any) => {
+      .then(({ data }) => {
         if (data) setBlocked(true);
       });
   }, [user, partnerId]);
@@ -363,13 +364,13 @@ const AnonymousChat = ({
   const handleReport = async () => {
     if (!reportReason || !user) return;
     setSubmitting(true);
-    const { error } = await supabase.from("anonymous_reports" as any).insert({
+    const { error } = await supabase.from("anonymous_reports").insert({
       reporter_id: user.id,
       reported_user_id: partnerId,
       match_id: match.id,
       reason: reportReason,
       details: reportDetails.trim() || null,
-    } as any);
+    });
     setSubmitting(false);
     if (error) {
       toast.error("Failed to submit report. Please try again.");
@@ -383,11 +384,11 @@ const AnonymousChat = ({
 
   const handleBlock = async () => {
     if (!user) return;
-    const { error } = await supabase.from("anonymous_blocks" as any).insert({
+    const { error } = await supabase.from("anonymous_blocks").insert({
       blocker_id: user.id,
       blocked_user_id: partnerId,
       match_id: match.id,
-    } as any);
+    });
     if (error) {
       toast.error("Failed to block user.");
     } else {

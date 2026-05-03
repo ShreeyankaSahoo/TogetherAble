@@ -7,18 +7,9 @@ import { Button } from "@/components/ui/button";
 import { User, MessageCircle, Loader2, ArrowLeft, Accessibility, Mic, Heart } from "lucide-react";
 import { toast } from "sonner";
 import { useNavigate } from "react-router-dom";
+import type { Database } from "@/integrations/supabase/types";
 
-interface PublicProfile {
-  id: string;
-  display_name: string | null;
-  avatar_url: string | null;
-  bio: string | null;
-  disability_type: string | null;
-  mobility_aids: string | null;
-  communication_style: string | null;
-  support_needs: string | null;
-  interests: string[] | null;
-}
+type PublicProfile = Database["public"]["Functions"]["get_public_profiles"]["Returns"][number];
 
 const PublicProfilePage = () => {
   const { userId } = useParams<{ userId: string }>();
@@ -32,7 +23,7 @@ const PublicProfilePage = () => {
     if (!userId) return;
     supabase
       .rpc("get_public_profiles", { _ids: [userId] })
-      .then(({ data }: any) => {
+      .then(({ data }) => {
         setProfile(data?.[0] ?? null);
         setLoading(false);
       });
@@ -46,8 +37,9 @@ const PublicProfilePage = () => {
     }
     setMessaging(true);
     try {
-      const convId = await createConversation(user.id, profile.id);
-      navigate(`/messages?conv=${convId}`);
+      await createConversation(user.id, profile.id);
+      toast.success("Conversation started");
+      navigate("/messages");
     } catch {
       toast.error("Could not start conversation");
     }
