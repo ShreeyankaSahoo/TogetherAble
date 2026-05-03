@@ -1,97 +1,118 @@
-const cors = require("cors");
 const express = require("express");
 const mongoose = require("mongoose");
+const cors = require("cors");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
+
 const User = require("./models/User");
+const Message = require("./models/message");
 
 const app = express();
 
+// ================= MIDDLEWARE =================
 app.use(express.json());
 app.use(cors());
 
-app.get("/", (req, res) => {
-  res.send("API is running");
-});
+// ================= MONGODB =================
+mongoose
+  .connect("mongodb://127.0.0.1:27017/togetherable")
+  .then(() => console.log("MongoDB connected"))
+  .catch((err) => console.log(err));
 
+
+// ================= SIGNUP =================
 app.post("/signup", async (req, res) => {
   try {
-    const { name, email, password, disability } = req.body;
+    const { name, email, password } = req.body;
+
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "User already exists" });
+    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser = new User({
+    const user = new User({
       name,
       email,
       password: hashedPassword,
-      disability,
     });
 
-    await newUser.save();
+    await user.save();
 
-    res.send("User saved securely");
+    res.json({ message: "Signup successful" });
   } catch (err) {
-    res.send("Error saving user");
+    res.status(500).json({ error: "Signup failed" });
   }
 });
 
+
+// ================= LOGIN =================
 app.post("/login", async (req, res) => {
   try {
     const { email, password } = req.body;
 
     const user = await User.findOne({ email });
-    if (!user) return res.send("User not found");
+
+    if (!user) {
+      return res.status(400).json({ message: "User not found" });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.send("Invalid credentials");
 
-    const token = jwt.sign({ id: user._id }, "secretkey123");
+    if (!isMatch) {
+      return res.status(400).json({ message: "Invalid credentials" });
+    }
 
-    res.json({ token });
+    res.json({ user });
+
   } catch (err) {
-    res.send("Error logging in");
+    console.log("LOGIN ERROR:", err);
+    res.status(500).json({ message: "Server error" });
   }
 });
 
-const authMiddleware = (req, res, next) => {
-  const authHeader = req.header("Authorization");
 
-  if (!authHeader) {
-    return res.send("Access denied. No token.");
-  }
-
+// ================= SEND MESSAGE =================
+app.post("/send-message", async (req, res) => {
   try {
-    const token = authHeader.split(" ")[1];
-    const verified = jwt.verify(token, "secretkey123");
+    const { senderId, receiverId, text } = req.body;
 
-    req.user = verified;
-    next();
+    const message = new Message({
+      sender: senderId,
+      receiver: receiverId,
+      text,
+    });
+
+    await message.save();
+
+    res.json(message);
   } catch (err) {
-    res.send("Invalid token");
+    res.status(500).json({ error: "Failed to send message" });
   }
-};
-
-app.get("/profile", authMiddleware, (req, res) => {
-  res.send("This is protected profile data 🔐");
 });
 
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => {
-    console.log("MongoDB connected");
-    const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-  })
-  .catch((err) => console.log(err));
+// ================= GET MESSAGES =================
+app.get("/messages/:user1/:user2", async (req, res) => {
+  try {
+    const { user1, user2 } = req.params;
 
-app.post("/login", (req, res) => {
-  const { email, password } = req.body;
+    const messages = await Message.find({
+      $or: [
+        { sender: user1, receiver: user2 },
+        { sender: user2, receiver: user1 },
+      ],
+    }).sort({ createdAt: 1 });
 
-  if (email === "test@gmail.com" && password === "123456") {
-    res.json({ message: "Login successful" });
-  } else {
-    res.status(401).json({ message: "Invalid credentials" });
+    res.json(messages);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to fetch messages" });
   }
-});  
+});
+
+
+// ================= START SERVER =================
+app.listen(10000, () => {
+  console.log("Server running on port 10000");
+});
