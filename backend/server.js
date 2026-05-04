@@ -105,100 +105,38 @@ mongoose
 // ================= SIGNUP =================
 app.post("/signup", async (req, res) => {
   try {
-    console.log("SIGNUP REQUEST RECEIVED", {
-      hasBody: Boolean(req.body),
-      bodyKeys: req.body && typeof req.body === "object" ? Object.keys(req.body) : [],
-    });
+    console.log("SIGNUP REQUEST RECEIVED");
+    console.log("BODY:", req.body);
 
-    if (!req.body || typeof req.body !== "object") {
-      return res.status(400).json({ success: false, message: "Invalid request body" });
+    const { email, password } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(400).json({ message: "User already exists" });
     }
 
-    const {
-      name,
+    // Create new user
+    const newUser = new User({
       email,
       password,
-      contactNumber,
-      country,
-      location,
-      genderIdentity,
-      pronouns,
-      disabilityType,
-      disabilityPercentage,
-      communicationStyle,
-      interests = [],
-      accessibilityPreferences = [],
-      communityTags = [],
-    } = req.body;
-
-    const normalizedEmail = String(email || "").trim().toLowerCase();
-    const plainPassword = String(password || "");
-    const trimmedName = String(name || normalizedEmail.split("@")[0] || "User").trim();
-
-    if (!normalizedEmail || !plainPassword) {
-      return res.status(400).json({
-        success: false,
-        message: "Email and password are required",
-      });
-    }
-
-    if (plainPassword.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message: "Password must be at least 6 characters",
-      });
-    }
-
-    const existingUser = await User.findOne({ email: normalizedEmail });
-    if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "User already exists",
-      });
-    }
-
-    const hashedPassword = await bcrypt.hash(plainPassword, 10);
-
-    const user = await User.create({
-      name: trimmedName,
-      email: normalizedEmail,
-      password: hashedPassword,
-      contactNumber,
-      country,
-      location,
-      genderIdentity,
-      pronouns,
-      disabilityType,
-      disabilityPercentage,
-      communicationStyle,
-      interests,
-      accessibilityPreferences,
-      communityTags,
     });
 
-    console.log("USER CREATED", {
-      userId: user._id,
-      email: user.email,
-    });
+    // Save user
+    await newUser.save();
+
+    console.log("USER SAVED SUCCESSFULLY");
 
     res.status(201).json({
       success: true,
-      message: "Signup successful",
-      user: { _id: user._id, name: user.name, email: user.email },
+      message: "User created successfully",
     });
+
   } catch (err) {
     console.error("SIGNUP ERROR:", err);
-    if (err.code === 11000) {
-      return res.status(400).json({ success: false, message: "User already exists" });
-    }
-    res.status(500).json({
-      success: false,
-      message: "Signup failed",
-      error: err.message,
-    });
+    res.status(500).json({ message: "Server error" });
   }
 });
-
 
 // ================= LOGIN =================
 app.post("/login", async (req, res) => {
