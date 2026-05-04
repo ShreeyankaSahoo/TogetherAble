@@ -105,6 +105,15 @@ mongoose
 // ================= SIGNUP =================
 app.post("/signup", async (req, res) => {
   try {
+    console.log("SIGNUP REQUEST RECEIVED", {
+      hasBody: Boolean(req.body),
+      bodyKeys: req.body && typeof req.body === "object" ? Object.keys(req.body) : [],
+    });
+
+    if (!req.body || typeof req.body !== "object") {
+      return res.status(400).json({ success: false, message: "Invalid request body" });
+    }
+
     const {
       name,
       email,
@@ -122,25 +131,35 @@ app.post("/signup", async (req, res) => {
       communityTags = [],
     } = req.body;
 
-    const trimmedName = String(name || "").trim();
     const normalizedEmail = String(email || "").trim().toLowerCase();
+    const plainPassword = String(password || "");
+    const trimmedName = String(name || normalizedEmail.split("@")[0] || "User").trim();
 
-    if (!trimmedName || !normalizedEmail || !password) {
-      return res.status(400).json({ message: "Name, email, and password are required" });
+    if (!normalizedEmail || !plainPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Email and password are required",
+      });
     }
 
-    if (password.length < 6) {
-      return res.status(400).json({ message: "Password must be at least 6 characters" });
+    if (plainPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters",
+      });
     }
 
     const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
-      return res.status(400).json({ message: "User already exists" });
+      return res.status(400).json({
+        success: false,
+        message: "User already exists",
+      });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
 
-    const user = new User({
+    const user = await User.create({
       name: trimmedName,
       email: normalizedEmail,
       password: hashedPassword,
@@ -157,18 +176,26 @@ app.post("/signup", async (req, res) => {
       communityTags,
     });
 
-    await user.save();
+    console.log("USER CREATED", {
+      userId: user._id,
+      email: user.email,
+    });
 
     res.status(201).json({
+      success: true,
       message: "Signup successful",
       user: { _id: user._id, name: user.name, email: user.email },
     });
   } catch (err) {
-    console.log("SIGNUP ERROR:", err);
+    console.error("SIGNUP ERROR:", err);
     if (err.code === 11000) {
-      return res.status(400).json({ message: "User already exists" });
+      return res.status(400).json({ success: false, message: "User already exists" });
     }
-    res.status(500).json({ message: "Signup failed" });
+    res.status(500).json({
+      success: false,
+      message: "Signup failed",
+      error: err.message,
+    });
   }
 });
 
@@ -176,6 +203,7 @@ app.post("/signup", async (req, res) => {
 // ================= LOGIN =================
 app.post("/login", async (req, res) => {
   try {
+    console.log("LOGIN REQUEST RECEIVED");
     console.log("LOGIN REQUEST:", {
       hasBody: Boolean(req.body),
       bodyKeys: req.body && typeof req.body === "object" ? Object.keys(req.body) : [],
