@@ -22,7 +22,17 @@ const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here"; // use env 
 
 // ================= MIDDLEWARE =================
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cors());
+
+app.use((err, req, res, next) => {
+  if (err instanceof SyntaxError && "body" in err) {
+    console.error("REQUEST JSON PARSE ERROR:", err.message);
+    return res.status(400).json({ message: "Invalid JSON request body" });
+  }
+
+  next(err);
+});
 
 // ================= SOCKET.IO =================
 io.on("connection", (socket) => {
@@ -120,16 +130,48 @@ app.post("/signup", async (req, res) => {
 // ================= LOGIN =================
 app.post("/login", async (req, res) => {
   try {
+    console.log("LOGIN REQUEST:", {
+      hasBody: Boolean(req.body),
+      bodyKeys: req.body && typeof req.body === "object" ? Object.keys(req.body) : [],
+    });
+
+    if (!req.body || typeof req.body !== "object") {
+      return res.status(400).json({ message: "Invalid request body" });
+    }
+
     const { email, password } = req.body;
     const normalizedEmail = String(email || "").trim().toLowerCase();
+    const plainPassword = String(password || "");
+
+    if (!normalizedEmail || !plainPassword) {
+      console.log("LOGIN VALIDATION FAILED:", {
+        hasEmail: Boolean(normalizedEmail),
+        hasPassword: Boolean(plainPassword),
+      });
+
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    console.log("LOGIN EMAIL:", normalizedEmail);
 
     const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
-      return res.status(400).json({ message: "User not found" });
+      console.log("LOGIN USER NOT FOUND:", normalizedEmail);
+      return res.status(404).json({ message: "User not found" });
     }
 
-    const isMatch = await bcrypt.compare(password, user.password);
+    if (!user.password || typeof user.password !== "string") {
+      console.error("LOGIN PASSWORD HASH MISSING:", {
+        userId: user._id,
+        email: normalizedEmail,
+      });
+
+      return res.status(500).json({ message: "User password is not configured correctly" });
+    }
+
+    const isMatch = await bcrypt.compare(plainPassword, user.password);
     if (!isMatch) {
+      console.log("LOGIN INVALID PASSWORD:", normalizedEmail);
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
@@ -140,11 +182,16 @@ app.post("/login", async (req, res) => {
       { expiresIn: "7d" }
     );
 
+    console.log("LOGIN SUCCESS:", {
+      userId: user._id,
+      email: normalizedEmail,
+    });
+
     res.json({ token, user: { _id: user._id, name: user.name, email: user.email } });
 
   } catch (err) {
-    console.log("LOGIN ERROR:", err);
-    res.status(500).json({ message: "Server error" });
+    console.error("LOGIN ERROR:", err);
+    res.status(500).json({ message: "Server error", error: err.message });
   }
 });
 
@@ -168,7 +215,7 @@ app.get("/users", async (req, res) => {
 
 
 // ================= SEND MESSAGE =================
-app.post("/send-message", async (req, res) => {
+app.post(["/send-message", "/messages"], async (req, res) => {
   try {
     const { senderId, receiverId, text } = req.body;
     const trimmedText = String(text || "").trim();

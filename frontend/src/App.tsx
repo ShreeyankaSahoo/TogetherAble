@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import { Toaster } from "@/components/ui/toaster";
@@ -11,19 +11,16 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
-// Pages
-import Index from "./pages/Index";
-import LoginPage from "./pages/LoginPage";
-import SignupPage from "./pages/SignupPage";
-import MatchingPage from "./pages/MatchingPage";
-import MessagesPage from "./pages/MessagesPage";
-import ProfilePage from "./pages/ProfilePage";
-import CommunityPage from "./pages/CommunityPage";
 import AboutPage from "./pages/AboutPage";
-import SubscriptionPage from "./pages/SubscriptionPage";
 import AnonymousDatingPage from "./pages/AnonymousDatingPage";
-import SafetyPage from "./pages/SafetyPage";
+import CommunityPage from "./pages/CommunityPage";
+import LoginPage from "./pages/LoginPage";
+import MessagesPage from "./pages/MessagesPage";
 import NotFound from "./pages/NotFound";
+import ProfilePage from "./pages/ProfilePage";
+import SafetyPage from "./pages/SafetyPage";
+import SignupPage from "./pages/SignupPage";
+import SubscriptionPage from "./pages/SubscriptionPage";
 
 const queryClient = new QueryClient();
 
@@ -39,20 +36,18 @@ function App() {
             <Navbar />
 
             <Routes>
-              {/* Public Routes */}
-              <Route path="/" element={<Index />} />
+              <Route path="/" element={<Navigate to="/login" replace />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
               <Route path="/about" element={<AboutPage />} />
               <Route path="/community" element={<CommunityPage />} />
               <Route path="/safety" element={<SafetyPage />} />
 
-              {/* Protected Routes */}
               <Route
-                path="/matching"
+                path="/messages"
                 element={
                   <ProtectedRoute>
-                    <MatchingPage />
+                    <MessagesPage />
                   </ProtectedRoute>
                 }
               />
@@ -62,15 +57,6 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <ProfilePage />
-                  </ProtectedRoute>
-                }
-              />
-
-              <Route
-                path="/messages"
-                element={
-                  <ProtectedRoute>
-                    <MessagesPage />
                   </ProtectedRoute>
                 }
               />
@@ -93,7 +79,7 @@ function App() {
                 }
               />
 
-              {/* 404 */}
+              <Route path="/matching" element={<Navigate to="/messages" replace />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
 

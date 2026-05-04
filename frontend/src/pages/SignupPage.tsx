@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Heart, ChevronRight, ChevronLeft, Plus, X, Shield, Sparkles, Users } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
+import { apiUrl } from "@/lib/api";
 
 const TOTAL_STEPS = 4;
 
@@ -101,7 +102,7 @@ const SignupPage = () => {
     const finalPronouns = pronouns === "Custom" ? customPronouns : pronouns;
 
     try {
-      const res = await fetch("http://localhost:10000/signup", {
+      const res = await fetch(apiUrl("/signup"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
