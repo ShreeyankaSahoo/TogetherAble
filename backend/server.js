@@ -2,6 +2,7 @@ const express = require("express");
 const http = require("http");
 const mongoose = require("mongoose");
 const cors = require("cors");
+require("dotenv").config();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const { Server } = require("socket.io");
@@ -11,24 +12,61 @@ const Message = require("./models/message");
 
 const app = express();
 const server = http.createServer(app);
+
+const allowedOrigins = [
+  "http://localhost:5173",
+  "http://localhost:3000",
+  "http://localhost:8080",
+  "http://127.0.0.1:8080",
+  "https://together-able.vercel.app",
+];
+
+const corsOptions = {
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error(`CORS blocked origin: ${origin}`));
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+
 const io = new Server(server, {
   cors: {
-    origin: ["http://localhost:8080", "http://127.0.0.1:8080"],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
+    credentials: true,
   },
 });
 // Add this near the top, after imports
 const JWT_SECRET = process.env.JWT_SECRET || "your_secret_key_here"; // use env variable in production
+const MONGO_URI = process.env.MONGO_URI;
+const PORT = process.env.PORT || 10000;
 
 // ================= MIDDLEWARE =================
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} ${req.method} ${req.originalUrl}`, {
+    origin: req.headers.origin,
+  });
+  next();
+});
+
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors());
 
 app.use((err, req, res, next) => {
+  if (err.message && err.message.startsWith("CORS blocked origin")) {
+    console.error("CORS ERROR:", err.message);
+    return res.status(403).json({ success: false, message: err.message });
+  }
+
   if (err instanceof SyntaxError && "body" in err) {
     console.error("REQUEST JSON PARSE ERROR:", err.message);
-    return res.status(400).json({ message: "Invalid JSON request body" });
+    return res.status(400).json({ success: false, message: "Invalid JSON request body" });
   }
 
   next(err);
@@ -50,10 +88,18 @@ io.on("connection", (socket) => {
 });
 
 // ================= MONGODB =================
+if (!MONGO_URI) {
+  console.error("MongoDB connection error: MONGO_URI environment variable is missing");
+  process.exit(1);
+}
+
 mongoose
-  .connect("mongodb://127.0.0.1:27017/togetherable")
-  .then(() => console.log("MongoDB connected"))
-  .catch((err) => console.log(err));
+  .connect(MONGO_URI)
+  .then(() => console.log("MongoDB connected successfully"))
+  .catch((err) => {
+    console.error("MongoDB connection error:", err);
+    process.exit(1);
+  });
 
 
 // ================= SIGNUP =================
@@ -136,7 +182,7 @@ app.post("/login", async (req, res) => {
     });
 
     if (!req.body || typeof req.body !== "object") {
-      return res.status(400).json({ message: "Invalid request body" });
+      return res.status(400).json({ success: false, message: "Invalid request body" });
     }
 
     const { email, password } = req.body;
@@ -149,7 +195,7 @@ app.post("/login", async (req, res) => {
         hasPassword: Boolean(plainPassword),
       });
 
-      return res.status(400).json({ message: "Email and password are required" });
+      return res.status(400).json({ success: false, message: "Email and password are required" });
     }
 
     console.log("LOGIN EMAIL:", normalizedEmail);
@@ -157,7 +203,7 @@ app.post("/login", async (req, res) => {
     const user = await User.findOne({ email: normalizedEmail });
     if (!user) {
       console.log("LOGIN USER NOT FOUND:", normalizedEmail);
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({ success: false, message: "User not found" });
     }
 
     if (!user.password || typeof user.password !== "string") {
@@ -166,13 +212,16 @@ app.post("/login", async (req, res) => {
         email: normalizedEmail,
       });
 
-      return res.status(500).json({ message: "User password is not configured correctly" });
+      return res.status(500).json({
+        success: false,
+        message: "User password is not configured correctly",
+      });
     }
 
     const isMatch = await bcrypt.compare(plainPassword, user.password);
     if (!isMatch) {
       console.log("LOGIN INVALID PASSWORD:", normalizedEmail);
-      return res.status(400).json({ message: "Invalid credentials" });
+      return res.status(400).json({ success: false, message: "Invalid credentials" });
     }
 
     // Sign a token instead of sending the raw user object
@@ -187,11 +236,23 @@ app.post("/login", async (req, res) => {
       email: normalizedEmail,
     });
 
-    res.json({ token, user: { _id: user._id, name: user.name, email: user.email } });
+    res.status(200).json({
+      success: true,
+      token,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+      },
+    });
 
   } catch (err) {
     console.error("LOGIN ERROR:", err);
-    res.status(500).json({ message: "Server error", error: err.message });
+    res.status(500).json({
+      success: false,
+      message: "Server error during login",
+      error: err.message,
+    });
   }
 });
 
@@ -304,6 +365,6 @@ app.get("/conversations/:userId", async (req, res) => {
 });
 
 // ================= START SERVER =================
-server.listen(10000, () => {
-  console.log("Server running on port 10000");
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
