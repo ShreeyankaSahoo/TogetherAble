@@ -11,32 +11,25 @@ const User = require("./models/User");
 const Message = require("./models/message");
 
 const app = express();
+
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://together-able-7a0e4fcd-shreeyankasahoos-projects.vercel.app"
+    ],
+    credentials: true,
+  })
+);
+
 const server = http.createServer(app);
-
-const allowedOrigins = [
-  "http://localhost:5173",
-  "http://localhost:3000",
-  "http://localhost:8080",
-  "http://127.0.0.1:8080",
-  "https://together-able.vercel.app",
-];
-
-const corsOptions = {
-  origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-
-    return callback(new Error(`CORS blocked origin: ${origin}`));
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
-};
 
 const io = new Server(server, {
   cors: {
-    origin: allowedOrigins,
+    origin: [
+      "http://localhost:5173",
+      "https://together-able-7a0e4fcd-shreeyankasahoos-projects.vercel.app"
+    ],
     methods: ["GET", "POST"],
     credentials: true,
   },
@@ -54,7 +47,6 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
