@@ -97,32 +97,26 @@ mongoose
 // ================= SIGNUP =================
 app.post("/signup", async (req, res) => {
   try {
-    console.log("SIGNUP REQUEST RECEIVED");
-    console.log("BODY:", req.body);
-
     const { email, password } = req.body;
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email });
+    if (!email || !password) {
+      return res.status(400).json({ message: "Email and password are required" });
+    }
+
+    const existingUser = await User.findOne({ email: email.trim().toLowerCase() });
     if (existingUser) {
       return res.status(400).json({ message: "User already exists" });
     }
 
-    // Create new user
+    const hashedPassword = await bcrypt.hash(password, 10); // ✅ THIS WAS MISSING
+
     const newUser = new User({
-      email,
-      password,
+      email: email.trim().toLowerCase(),
+      password: hashedPassword,
     });
 
-    // Save user
     await newUser.save();
-
-    console.log("USER SAVED SUCCESSFULLY");
-
-    res.status(201).json({
-      success: true,
-      message: "User created successfully",
-    });
+    res.status(201).json({ success: true, message: "User created successfully" });
 
   } catch (err) {
     console.error("SIGNUP ERROR:", err);
